@@ -1,0 +1,14 @@
+- hosts: all
+  name: Ansible playbook to install a web server
+  tasks:
+    - name: Update the apt repository and install nginx in latest version
+      become: true
+      apt:
+        name: nginx
+        state: latest
+        update_cache: yes
+    - name: Ensure nginx is running
+      service:
+        name: nginx
+        state: started
+        enabled: yes
