@@ -86,6 +86,7 @@ resources:
               Hostname set by cloud-init to ${input.hostname}
 
         runcmd:
+          - apt update && apt upgrade -y
           - echo "Setting hostname to ${input.hostname}" >> /tmp/cloudinit.log
           - hostnamectl set-hostname ${input.hostname}
           - echo "Running netplan apply" >> /tmp/cloudinit.log
