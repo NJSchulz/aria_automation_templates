@@ -26,3 +26,13 @@
         name: nginx
         state: started
         enabled: yes
+
+    - name: Reboot the VM after updates
+      become: true
+      reboot:
+        msg: "Rebooting the VM to apply updates"
+        connect_timeout: 5
+        reboot_timeout: 600
+        pre_reboot_delay: 5
+        post_reboot_delay: 30
+        test_command: whoami
