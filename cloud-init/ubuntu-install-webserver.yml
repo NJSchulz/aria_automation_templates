@@ -1,14 +1,38 @@
 - hosts: all
   name: Ansible playbook to install a web server
+  become: true
   tasks:
-    - name: Update the apt repository and install nginx in latest version
-      become: true
+    - name: Wait for any other apt/dpkg process to finish
+      shell: |
+        while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
+          echo "Waiting for apt lock to be released..."; sleep 5;
+        done
+      changed_when: false
+
+    - name: Upgrade all packages
+      apt:
+        upgrade: dist
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install nginx (latest version)
       apt:
         name: nginx
         state: latest
         update_cache: yes
+
     - name: Ensure nginx is running
       service:
         name: nginx
         state: started
         enabled: yes
+
+    - name: Reboot the VM after updates
+      become: true
+      reboot:
+        msg: "Rebooting the VM to apply updates"
+        connect_timeout: 5
+        reboot_timeout: 600
+        pre_reboot_delay: 5
+        post_reboot_delay: 30
+        test_command: whoami
