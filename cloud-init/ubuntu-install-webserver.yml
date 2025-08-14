@@ -14,13 +14,15 @@
         upgrade: dist
         update_cache: yes
         cache_valid_time: 3600
-
-    - name: Install nginx (latest version)
+    
+    - name: Install required packages
       apt:
-        name: nginx
-        state: latest
+        name:
+          - git
+          - nginx
+        state: present
         update_cache: yes
-
+    
     - name: Ensure nginx is running
       service:
         name: nginx
