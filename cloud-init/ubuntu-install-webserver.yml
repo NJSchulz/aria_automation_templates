@@ -27,6 +27,27 @@
         state: started
         enabled: yes
 
+    - name: Ensure snapd is installed
+      apt:
+        name: snapd
+        state: present
+        update_cache: yes
+
+    - name: Wait for snap seed (one-time init)
+      command: snap wait system seed
+      changed_when: false
+
+    - name: Install kubectl via snap (classic)
+      # Use the snap module if you have community.general; otherwise keep this command task.
+      command: snap install kubectl --classic
+      args:
+        creates: /snap/bin/kubectl
+
+    - name: Verify kubectl
+      command: kubectl version --client
+      register: kubectl_ver
+      changed_when: false
+      
     - name: Reboot the VM after updates
       become: true
       reboot:
