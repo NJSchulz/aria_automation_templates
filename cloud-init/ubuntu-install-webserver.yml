@@ -1,12 +1,14 @@
 - hosts: all
   name: Ansible playbook to install a web server
   become: true
+  vars:
+    kubectl_minor: "v1.34"   # keep within one minor version of the clusters you manage
   tasks:
     - name: Wait for any other apt/dpkg process to finish
       shell: |
-        while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
+        timeout 600 bash -c 'while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
           echo "Waiting for apt lock to be released..."; sleep 5;
-        done
+        done'
       changed_when: false
 
     - name: Upgrade all packages
@@ -27,29 +29,45 @@
         state: started
         enabled: yes
 
-    - name: Ensure snapd is installed
+    - name: Ensure apt keyring directory exists
+      file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: "0755"
+
+    - name: Add Kubernetes apt signing key
+      get_url:
+        url: "https://pkgs.k8s.io/core:/stable:/{{ kubectl_minor }}/deb/Release.key"
+        dest: /etc/apt/keyrings/kubernetes-apt-keyring.asc
+        mode: "0644"
+        timeout: 30
+      register: k8s_key
+      retries: 3
+      delay: 10
+      until: k8s_key is succeeded
+
+    - name: Add Kubernetes apt repository
+      apt_repository:
+        repo: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.asc] https://pkgs.k8s.io/core:/stable:/{{ kubectl_minor }}/deb/ /"
+        filename: kubernetes
+        state: present
+
+    - name: Install kubectl from the Kubernetes apt repo
       apt:
-        name: snapd
+        name: kubectl
         state: present
         update_cache: yes
-
-    - name: Wait for snap seed (one-time init)
-      command: snap wait system seed
-      changed_when: false
-
-    - name: Install kubectl via snap (classic)
-      # Use the snap module if you have community.general; otherwise keep this command task.
-      command: snap install kubectl --classic
-      args:
-        creates: /snap/bin/kubectl
+      register: kubectl_pkg
+      retries: 3
+      delay: 15
+      until: kubectl_pkg is succeeded
 
     - name: Verify kubectl
       command: kubectl version --client
       register: kubectl_ver
       changed_when: false
-      
+
     - name: Reboot the VM after updates
-      become: true
       reboot:
         msg: "Rebooting the VM to apply updates"
         connect_timeout: 5
