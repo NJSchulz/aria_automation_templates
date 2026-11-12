@@ -2,7 +2,7 @@
   name: Ansible playbook to install a web server
   become: true
   vars:
-    kubectl_minor: "v1.37"   # keep within one minor version of the clusters you manage
+    kubectl_minor: "v1.35"   # keep within one minor version of the clusters you manage
   tasks:
     - name: Wait for any other apt/dpkg process to finish
       shell: |
