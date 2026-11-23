@@ -1,5 +1,13 @@
+# Used by the AWX job template "Ubuntu web server + kubectl (cloud-init)"
+# (project vcfa-project, playbook path cloud-init/ubuntu-install-webserver.yml).
+# The filename and path are kept so existing templates and VCFA blueprints
+# keep working; a rename can follow once those references are updated together.
+#
+# This playbook no longer installs nginx. It installs a pinned kubectl from
+# pkgs.k8s.io and writes a provenance marker so SSH and the AWX job record
+# can show that AWX configured the VM.
 - hosts: all
-  name: Ansible playbook to install a web server
+  name: Install kubectl and write a lab provenance marker
   become: true
   vars:
     kubectl_minor: "v1.35"   # keep within one minor version of the clusters you manage
@@ -16,18 +24,6 @@
         upgrade: dist
         update_cache: yes
         cache_valid_time: 3600
-
-    - name: Install nginx (latest version)
-      apt:
-        name: nginx
-        state: latest
-        update_cache: yes
-
-    - name: Ensure nginx is running
-      service:
-        name: nginx
-        state: started
-        enabled: yes
 
     - name: Ensure apt keyring directory exists
       file:
@@ -67,6 +63,53 @@
       register: kubectl_ver
       changed_when: false
 
+    - name: Write lab provenance marker
+      copy:
+        dest: /etc/lab-provisioned.json
+        owner: root
+        group: root
+        mode: "0644"
+        content: "{{ lab_provenance | to_nice_json }}\n"
+      vars:
+        lab_provenance:
+          tool: awx
+          source: "{{ awx_job_template_name | default('unknown') }}"
+          version: "{{ ansible_version.full }}"
+          host: "{{ ansible_hostname | default(inventory_hostname) }}"
+          configured_at: "{{ ansible_date_time.iso8601 }}"
+          job_id: "{{ awx_job_id | default('unknown') }}"
+
+    - name: Write a static motd banner
+      copy:
+        dest: /etc/motd
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          ************************************************************************
+            This system was configured by AWX/Ansible.
+            Template: {{ awx_job_template_name | default('unknown') }}    Job: {{ awx_job_id | default('unknown') }}
+            See /etc/lab-provisioned.json for provision details.
+          ************************************************************************
+
+    - name: Write a dynamic motd banner for Ubuntu SSH logins
+      copy:
+        dest: /etc/update-motd.d/99-lab-awx
+        owner: root
+        group: root
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          echo
+          echo "************************************************************************"
+          echo "  This system was configured by AWX/Ansible."
+          echo "  Template: {{ awx_job_template_name | default('unknown') }}    Job: {{ awx_job_id | default('unknown') }}"
+          echo "  See /etc/lab-provisioned.json for provision details."
+          echo "************************************************************************"
+          echo
+
+    # Reboot is kept: it applies the dist-upgrade (kernel/libc and friends),
+    # not nginx. The ansible reboot module reconnects when the host is back.
     - name: Reboot the VM after updates
       reboot:
         msg: "Rebooting the VM to apply updates"
